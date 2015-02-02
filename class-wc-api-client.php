@@ -14,7 +14,7 @@ class WC_API_Client {
 	/**
 	 * API base endpoint
 	 */
-	const API_ENDPOINT = 'wc-api/v1/';
+	const API_ENDPOINT = 'wc-api/v2/';
 
 	/**
 	 * The HASH alorithm to use for oAuth signature, SHA256 or SHA1
@@ -52,18 +52,26 @@ class WC_API_Client {
 	private $_return_as_object = true;
 
 	/**
-	 * Default contructor
-	 * @param string  $consumer_key    The consumer key
-	 * @param string  $consumer_secret The consumer secret
-	 * @param string  $store_url       The URL to the WooCommerce store
-	 * @param boolean $is_ssl          If the URL is secure or not, optional
+	 * Configurable timeout
+	 * @var integer
 	 */
-	public function __construct( $consumer_key, $consumer_secret, $store_url, $is_ssl = false ) {
+	private $_api_call_timeout;
+
+	/**
+	 * Default contructor
+	 * @param string  $consumer_key    		The consumer key
+	 * @param string  $consumer_secret 		The consumer secret
+	 * @param string  $store_url       		The URL to the WooCommerce store
+	 * @param boolean $is_ssl          		If the URL is secure or not, optional
+	 * @param integer $api_call_timeout     Custom duration for timeouts, optional
+	 */
+	public function __construct( $consumer_key, $consumer_secret, $store_url, $is_ssl = false, $api_call_timeout = 30 ) {
 		if ( ! empty( $consumer_key ) && ! empty( $consumer_secret ) && ! empty( $store_url ) ) {
 			$this->_api_url = (  rtrim($store_url,'/' ) . '/' ) . self::API_ENDPOINT;
 			$this->set_consumer_key( $consumer_key );
 			$this->set_consumer_secret( $consumer_secret );
 			$this->set_is_ssl( $is_ssl );
+			$this->set_api_call_timeout( $api_call_timeout );
 		} else if ( ! isset( $consumer_key ) && ! isset( $consumer_secret ) ) {
 			throw new Exception( 'Error: __construct() - Consumer Key / Consumer Secret missing.' );
 		} else {
@@ -82,7 +90,7 @@ class WC_API_Client {
 	/**
 	 * Get all orders
 	 * @param  array  $params
-	 * @return mixed|jason string
+	 * @return mixed|json string
 	 */
 	public function get_orders( $params = array() ) {
 		return $this->_make_api_call( 'orders', $params );
@@ -121,7 +129,7 @@ class WC_API_Client {
 	 * @return mixed|json string
 	 */
 	public function update_order( $order_id, $data = array() ) {
-		return $this->_make_api_call( 'orders/' . $order_id, $data, 'POST' );
+		return $this->_make_api_call( 'orders/' . $order_id, array('order' => $data), 'POST' );
 	}
 
 	/**
@@ -246,6 +254,36 @@ class WC_API_Client {
 	public function get_product_reviews( $product_id ) {
 		return $this->_make_api_call( 'products/' . $product_id . '/reviews' );
 	}
+	
+	/**
+	 * Update a product
+	 * @param  integer $product_id
+	 * @param  array  $data
+	 * @return mixed|json string
+	 */
+	public function update_product( $product_id, $data = array() ) {
+		/*return $this->_make_api_call( 'products/' . $product_id, array( "product" => $data ), 'PUT' );*/
+		return $this->_make_api_call( 'products/' . $product_id, array( "product" => $data ), 'POST' );
+	}
+	
+	/**
+	 * Delete a product
+	 * @param  integer $product_id
+	 * @param boolean $is_permanent
+	 * @return mixed|json string
+	 */
+	public function delete_product( $product_id, $is_permanent = false ) {
+		return $this->_make_api_call( 'products/' . $product_id . '/?force=' . ( $is_permanent ? 'true' : 'false' ), $data = array(), 'DELETE' );
+	}
+	
+	/**
+	 * Create a product
+	 * @param  array  $data
+	 * @return mixed|json string
+	 */
+	public function create_product( $data = array() ) {
+		return $this->_make_api_call( 'products/', array( "product" => $data ), 'POST' );
+	}
 
 	/**
 	 * Get reports
@@ -322,6 +360,14 @@ class WC_API_Client {
 	}
 
 	/**
+	 * Set the timeout 
+	 * @param string $api_call_timeout
+	 */
+	public function set_api_call_timeout( $api_call_timeout ) {
+		$this->_api_call_timeout = $api_call_timeout;
+	}
+
+	/**
 	 * Make the call to the API
 	 * @param  string $endpoint
 	 * @param  array  $params
@@ -351,16 +397,25 @@ class WC_API_Client {
 		// Set up the enpoint URL
 		curl_setopt( $ch, CURLOPT_URL, $this->_api_url . $endpoint . $paramString );
 		curl_setopt( $ch, CURLOPT_SSL_VERIFYPEER, false );
-		curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, 30 );
-        curl_setopt( $ch, CURLOPT_TIMEOUT, 30 );
+		curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, $this->_api_call_timeout );
+        curl_setopt( $ch, CURLOPT_TIMEOUT, $this->_api_call_timeout );
         curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-
-        if ( 'POST' === $method ) {
-			curl_setopt( $ch, CURLOPT_POST, true );
-			curl_setopt( $ch, CURLOPT_POSTFIELDS, json_encode( $params ) );
-    	} else if ( 'DELETE' === $method ) {
-			curl_setopt( $ch, CURLOPT_CUSTOMREQUEST, 'DELETE' );
-    	}
+		
+		switch ($method) {
+			case 'POST':
+				curl_setopt( $ch, CURLOPT_POST, true );
+				curl_setopt( $ch, CURLOPT_POSTFIELDS, json_encode( $params ) );
+				break;
+			
+			case 'DELETE':
+				curl_setopt( $ch, CURLOPT_CUSTOMREQUEST, 'DELETE' );
+				break;
+			
+			case 'PUT':
+				curl_setopt( $ch, CURLOPT_CUSTOMREQUEST, "PUT" );
+				curl_setopt( $ch, CURLOPT_POSTFIELDS, json_encode( $params ) );
+				break;
+		}
 
 		$return = curl_exec( $ch );
 
@@ -430,14 +485,18 @@ class WC_API_Client {
 		$normalized_parameters = array();
 
 		foreach ( $parameters as $key => $value ) {
-
+			
 			// percent symbols (%) must be double-encoded
 			$key   = str_replace( '%', '%25', rawurlencode( rawurldecode( $key ) ) );
-			$value = str_replace( '%', '%25', rawurlencode( rawurldecode( $value ) ) );
+			if( is_array( $value ) ) {
+				$value = $this->normalize_parameters( $value );
+			} else {
+				$value = str_replace( '%', '%25', rawurlencode( rawurldecode( $value ) ) );
+			}
 
 			$normalized_parameters[ $key ] = $value;
 		}
-
+		
 		return $normalized_parameters;
 	}
 
