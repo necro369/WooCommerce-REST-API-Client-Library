@@ -74,4 +74,16 @@ $wc_api = new WC_API_Client( $consumer_key, $consumer_secret, $store_url );
 // Get top sellers report
 // print_r( $wc_api->get_top_sellers_report() );
 
+// Update a product
+//print_r( $wc_api->update_product( 18, $data = array( "regular_price" => "16.66" ) ) );
 
+// Delete a product
+//print_r( $wc_api->delete_product( 18 ) );
+
+// Create a product
+/*print_r( $wc_api->create_product( $data = array( "title" => "Premium Quality",
+													"type" => "simple",
+													"regular_price" => "21.99",
+													"catalog_visibility" => "visible",
+													"description" => "Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. Aenean ultricies mi vitae est. Mauris placerat eleifend leo.",
+													"short_description" => "Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas." ) ) );*/
